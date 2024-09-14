@@ -39,5 +39,27 @@ public class Tests
             var exception = Should.Throw<Exception>(() => container.Resolve<IService>());
             exception.Message.ShouldBe("Type IService not registered");
         }
+
+        public class ClassA
+        {
+            public ClassA(ClassB b) { }
+        }
+
+        public class ClassB
+        {
+            public ClassB(ClassA a) { }
+        }
+
+        [Test]
+        public void Resolve_circular_dependency_should_throw_exception()
+        {
+            // Arrange
+            container.Register<ClassA, ClassA>();
+            container.Register<ClassB, ClassB>();
+
+            // Act & Assert
+            var exception = Should.Throw<InvalidOperationException>(() => container.Resolve<ClassA>());
+            exception.Message.ShouldBe("Circular dependency detected for type ClassA");
+        }
     }
 }
