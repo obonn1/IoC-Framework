@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography.X509Certificates;
 using IoC_Framework.Core;
 using Shouldly;
 
@@ -22,7 +20,7 @@ public class Tests
         private readonly Container container = new();
 
         [Test]
-        public void Register_and_resolve_interfe_should_return_correct_implementation()
+        public void Register_and_resolve_interface_should_return_correct_implementation()
         {
             // Arrange
             container.Register<IService, ServiceImplementation>();
