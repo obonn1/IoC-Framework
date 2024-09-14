@@ -2,7 +2,7 @@
 
 public class Container
 {
-    private readonly Dictionary<Type, Type> registrations = new();
+    private readonly Dictionary<Type, Type> registrations = [];
 
     public void Register<TInterface, TImplementation>()
     {
@@ -16,10 +16,9 @@ public class Container
 
     private object Resolve(Type interfaceType)
     {
-        if (!registrations.ContainsKey(interfaceType))
+        if (!registrations.TryGetValue(interfaceType, out var implementationType))
             throw new Exception($"Type {interfaceType.Name} not registered");
 
-        var implementationType = registrations[interfaceType];
         var constructor = implementationType.GetConstructors().First();
 
         var parameters = constructor.GetParameters()
@@ -28,9 +27,6 @@ public class Container
 
         var instance = Activator.CreateInstance(implementationType, parameters);
 
-        if (instance is null)
-            throw new Exception($"Failed to create instance of {implementationType.Name}");
-
-        return instance;
+        return instance ?? throw new Exception($"Failed to create instance of {implementationType.Name}");
     }
 }
