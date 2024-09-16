@@ -5,11 +5,12 @@ using Shouldly;
 
 namespace IoC_Framework.Tests;
 
-public interface IService { }
-public class ServiceImplementation : IService { }
-public class AnotherService(IService service)
+public interface IServiceA;
+public class ServiceAImplementation : IServiceA;
+
+public class AnotherServiceAImplementation(IServiceA service)
 {
-    public IService Service { get; } = service;
+    public IServiceA Service { get; } = service;
 }
 
 public class Tests
@@ -23,21 +24,21 @@ public class Tests
         public void Register_and_resolve_interface_should_return_correct_implementation()
         {
             // Arrange
-            container.Register<IService, ServiceImplementation>();
+            container.Register<IServiceA, ServiceAImplementation>();
 
             // Act
-            var result = container.Resolve<IService>();
+            var result = container.Resolve<IServiceA>();
 
             // Assert
-            result.ShouldBeOfType<ServiceImplementation>();
+            result.ShouldBeOfType<ServiceAImplementation>();
         }
 
         [Test]
         public void Resolving_unregistered_interface_should_throw_exception()
         {
             // Act & Assert
-            var exception = Should.Throw<Exception>(() => container.Resolve<IService>());
-            exception.Message.ShouldBe("Type IService not registered");
+            var exception = Should.Throw<Exception>(() => container.Resolve<IServiceA>());
+            exception.Message.ShouldBe("Type IServiceA not registered");
         }
 
         public class ClassA
@@ -60,6 +61,22 @@ public class Tests
             // Act & Assert
             var exception = Should.Throw<InvalidOperationException>(() => container.Resolve<ClassA>());
             exception.Message.ShouldBe("Circular dependency detected for type ClassA");
+        }
+
+        [Test]
+        public void Register_multiple_implementations_and_resolve_all_should_return_all_implementations()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>();
+            container.Register<IServiceA, AnotherServiceAImplementation>();
+
+            // Act
+            var result = container.ResolveAll<IServiceA>().ToList();
+
+            // Assert
+            result.Count.ShouldBe(2);
+            result.ShouldContain(x => x.GetType() == typeof(ServiceAImplementation));
+            result.ShouldContain(x => x.GetType() == typeof(AnotherServiceAImplementation));
         }
     }
 }
