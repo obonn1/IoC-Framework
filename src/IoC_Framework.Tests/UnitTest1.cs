@@ -6,12 +6,10 @@ using Shouldly;
 namespace IoC_Framework.Tests;
 
 public interface IServiceA;
+public interface IServiceB;
 public class ServiceAImplementation : IServiceA;
-
-public class AnotherServiceAImplementation(IServiceA service)
-{
-    public IServiceA Service { get; } = service;
-}
+public class AnotherServiceAImplementation : IServiceA;
+public class ServiceBImplementation : IServiceB;
 
 public class Tests
 {
@@ -38,29 +36,22 @@ public class Tests
         {
             // Act & Assert
             var exception = Should.Throw<Exception>(() => container.Resolve<IServiceA>());
-            exception.Message.ShouldBe("Type IServiceA not registered");
+            exception.Message.ShouldBe("Type IServiceA not registered.");
         }
 
-        public class ClassA
-        {
-            public ClassA(ClassB b) { }
-        }
-
-        public class ClassB
-        {
-            public ClassB(ClassA a) { }
-        }
+        public class CircularClassA(CircularClassB b);
+        public class CircularClassB(CircularClassA a);
 
         [Test]
         public void Resolve_circular_dependency_should_throw_exception()
         {
             // Arrange
-            container.Register<ClassA, ClassA>();
-            container.Register<ClassB, ClassB>();
+            container.Register<CircularClassA, CircularClassA>();
+            container.Register<CircularClassB, CircularClassB>();
 
             // Act & Assert
-            var exception = Should.Throw<InvalidOperationException>(() => container.Resolve<ClassA>());
-            exception.Message.ShouldBe("Circular dependency detected for type ClassA");
+            var exception = Should.Throw<InvalidOperationException>(() => container.Resolve<CircularClassA>());
+            exception.Message.ShouldBe("Circular dependency detected for type CircularClassA.");
         }
 
         [Test]
@@ -77,6 +68,94 @@ public class Tests
             result.Count.ShouldBe(2);
             result.ShouldContain(x => x.GetType() == typeof(ServiceAImplementation));
             result.ShouldContain(x => x.GetType() == typeof(AnotherServiceAImplementation));
+        }
+
+        [Test]
+        public void Registering_the_same_interface_multiple_times_should_return_last_registration_for_single_resolve()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>();
+            container.Register<IServiceA, AnotherServiceAImplementation>();
+
+            // Act
+            var result = container.Resolve<IServiceA>();
+
+            // Assert
+            result.ShouldBeOfType<AnotherServiceAImplementation>();
+        }
+
+        public class ClassWithSingleParameter(IServiceA serviceA);
+
+        [Test]
+        public void Resolve_type_with_constructor_dependencies_should_inject_dependencies()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>();
+            container.Register<ClassWithSingleParameter, ClassWithSingleParameter>();
+
+            // Act
+            var result = container.Resolve<ClassWithSingleParameter>();
+
+            // Assert
+            result.ShouldNotBeNull();
+        }
+
+        public class ClassWithMultipleParameters(IServiceA serviceA, IServiceB classA);
+
+        [Test]
+        public void Resolve_type_with_multiple_constructor_dependencies_should_inject_dependencies()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>();
+            container.Register<IServiceB, ServiceBImplementation>();
+            container.Register<ClassWithMultipleParameters, ClassWithMultipleParameters>();
+
+            // Act
+            var result = container.Resolve<ClassWithMultipleParameters>();
+
+            // Assert
+            result.ShouldNotBeNull();
+        }
+
+        [Test]
+        public void Register_without_specifying_lifetime_should_default_to_transient()
+        {
+            // Act
+            container.Register<IServiceA, ServiceAImplementation>();
+
+            // Assert
+            var instance1 = container.Resolve<IServiceA>();
+            var instance2 = container.Resolve<IServiceA>();
+
+            instance1.ShouldNotBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Resolve_as_singleton_should_return_same_instance_each_time()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Singleton);
+
+            // Act
+            var instance1 = container.Resolve<IServiceA>();
+            var instance2 = container.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Resolve_as_transient_should_return_different_instance_each_time()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Transient);
+
+            // Act
+            var instance1 = container.Resolve<IServiceA>();
+            var instance2 = container.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldNotBeSameAs(instance2);
         }
     }
 }

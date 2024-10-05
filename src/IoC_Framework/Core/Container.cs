@@ -2,15 +2,15 @@
 
 public class Container
 {
-    private readonly Dictionary<Type, List<Type>> registrations = [];
+    private readonly Dictionary<Type, Registration> registrations = [];
     private readonly HashSet<Type> resolvingTypes = [];
 
-    public void Register<TInterface, TImplementation>()
+    public void Register<TInterface, TImplementation>(Lifetime lifetime = Lifetime.Transient)
     {
         if (!registrations.ContainsKey(typeof(TInterface)))
-            registrations[typeof(TInterface)] = new List<Type>();
+            registrations[typeof(TInterface)] = new Registration([], lifetime);
 
-        registrations[typeof(TInterface)].Add(typeof(TImplementation));
+        registrations[typeof(TInterface)] = registrations[typeof(TInterface)].AddImplementation(typeof(TImplementation));
     }
 
     public TInterface Resolve<TInterface>()
@@ -32,25 +32,32 @@ public class Container
             return ResolveAll(itemType);
         }
 
-        if (!registrations.TryGetValue(interfaceType, out var implementationTypes) || !implementationTypes.Any())
-            throw new Exception($"Type {interfaceType.Name} not registered");
+        if (!registrations.TryGetValue(interfaceType, out var registration))
+            throw new Exception($"Type {interfaceType.Name} not registered.");
 
-        var implementationType = implementationTypes.Last();
+        var implementationType = registration.Implementations.Last();
+
+        if (registration.Lifetime == Lifetime.Singleton)
+        {
+            return registration.Instance ??
+                   (registration.Instance = CreateInstance(implementationType));
+        }
+
         return CreateInstance(implementationType);
     }
 
     private IEnumerable<object> ResolveAll(Type interfaceType)
     {
-        if (!registrations.TryGetValue(interfaceType, out var implementationTypes) || !implementationTypes.Any())
-            throw new Exception($"Type {interfaceType.Name} not registered");
+        if (!registrations.TryGetValue(interfaceType, out var registration))
+            throw new Exception($"Type {interfaceType.Name} not registered.");
 
-        return implementationTypes.Select(CreateInstance).ToList();
+        return registration.Implementations.Select(CreateInstance).ToList();
     }
 
     private object CreateInstance(Type implementationType)
     {
         if (!resolvingTypes.Add(implementationType))
-            throw new InvalidOperationException($"Circular dependency detected for type {implementationType.Name}");
+            throw new InvalidOperationException($"Circular dependency detected for type {implementationType.Name}.");
 
         try
         {
@@ -60,13 +67,11 @@ public class Container
                 .ToArray();
 
             var instance = Activator.CreateInstance(implementationType, parameters);
-            return instance ?? throw new Exception($"Failed to create instance of {implementationType.Name}");
+            return instance ?? throw new Exception($"Failed to create instance of {implementationType.Name}.");
         }
         finally
         {
             resolvingTypes.Remove(implementationType);
         }
     }
-
-
 }
