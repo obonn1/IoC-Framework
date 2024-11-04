@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using IoC_Framework.Core;
 using Shouldly;
 
@@ -17,6 +18,15 @@ public class Tests
     public class ContainerTests
     {
         private readonly Container container = new();
+
+#pragma warning disable CS9113 // Parameter is unread
+
+        public class CircularClassA(CircularClassB b);
+        public class CircularClassB(CircularClassA a);
+        public class ClassWithMultipleParameters(IServiceA serviceA, IServiceB classA);
+        public class ClassWithSingleParameter(IServiceA serviceA);
+
+#pragma warning restore CS9113 // Parameter is unread
 
         [Test]
         public void Register_and_resolve_interface_should_return_correct_implementation()
@@ -38,9 +48,6 @@ public class Tests
             var exception = Should.Throw<Exception>(() => container.Resolve<IServiceA>());
             exception.Message.ShouldBe("Type IServiceA not registered.");
         }
-
-        public class CircularClassA(CircularClassB b);
-        public class CircularClassB(CircularClassA a);
 
         [Test]
         public void Resolve_circular_dependency_should_throw_exception()
@@ -84,8 +91,6 @@ public class Tests
             result.ShouldBeOfType<AnotherServiceAImplementation>();
         }
 
-        public class ClassWithSingleParameter(IServiceA serviceA);
-
         [Test]
         public void Resolve_type_with_constructor_dependencies_should_inject_dependencies()
         {
@@ -99,8 +104,6 @@ public class Tests
             // Assert
             result.ShouldNotBeNull();
         }
-
-        public class ClassWithMultipleParameters(IServiceA serviceA, IServiceB classA);
 
         [Test]
         public void Resolve_type_with_multiple_constructor_dependencies_should_inject_dependencies()
