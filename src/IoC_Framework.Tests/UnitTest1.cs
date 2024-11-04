@@ -157,5 +157,134 @@ public class Tests
             // Assert
             instance1.ShouldNotBeSameAs(instance2);
         }
+
+        [Test]
+        public void Resolve_scoped_service_in_same_scope_should_return_same_instance()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Scoped);
+            using var scope = container.BeginScope();
+
+            // Act
+            var instance1 = scope.Resolve<IServiceA>();
+            var instance2 = scope.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Resolve_scoped_service_in_different_scopes_should_return_different_instances()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Scoped);
+            using var scope1 = container.BeginScope();
+            using var scope2 = container.BeginScope();
+
+            // Act
+            var instance1 = scope1.Resolve<IServiceA>();
+            var instance2 = scope2.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldNotBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Dispose_scope_should_clear_all_instances()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Scoped);
+            var scope = container.BeginScope();
+            _ = scope.Resolve<IServiceA>();
+
+            // Act
+            scope.Dispose();
+
+            // Assert
+            var exception = Should.Throw<ObjectDisposedException>(() => scope.Resolve<IServiceA>());
+            exception.Message.ShouldBe("""
+                                       Cannot access a disposed object.
+                                       Object name: 'Scope'.
+                                       """);
+        }
+
+        [Test]
+        public void Resolve_singleton_service_in_different_scopes_should_return_same_instance()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Singleton);
+            using var scope1 = container.BeginScope();
+            using var scope2 = container.BeginScope();
+
+            // Act
+            var instance1 = scope1.Resolve<IServiceA>();
+            var instance2 = scope2.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Resolve_transient_service_in_same_scope_should_return_different_instances()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Transient);
+            using var scope = container.BeginScope();
+
+            // Act
+            var instance1 = scope.Resolve<IServiceA>();
+            var instance2 = scope.Resolve<IServiceA>();
+
+            // Assert
+            instance1.ShouldNotBeSameAs(instance2);
+        }
+
+        [Test]
+        public void Resolve_scoped_service_outside_of_scope_should_throw_exception()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Scoped);
+
+            // Act & Assert
+            var exception = Should.Throw<InvalidOperationException>(() => container.Resolve<IServiceA>());
+            exception.Message.ShouldBe("Scope is required for scoped lifetime.");
+        }
+
+        [Test]
+        public void Nested_scopes_should_resolve_dependencies_correctly()
+        {
+            // Arrange
+            container.Register<IServiceA, ServiceAImplementation>(Lifetime.Scoped);
+            using var outerScope = container.BeginScope();
+            using var innerScope = container.BeginScope();
+
+            // Act
+            var outerInstance = outerScope.Resolve<IServiceA>();
+            var innerInstance = innerScope.Resolve<IServiceA>();
+
+            // Assert
+            outerInstance.ShouldNotBeSameAs(innerInstance);
+        }
+
+        public class DisposableService : IServiceA, IDisposable
+        {
+            public bool IsDisposed { get; private set; }
+            public void Dispose() => IsDisposed = true;
+        }
+
+        [Test]
+        public void Disposing_scope_should_dispose_scoped_services()
+        {
+            // Arrange
+            container.Register<IServiceA, DisposableService>(Lifetime.Scoped);
+            var scope = container.BeginScope();
+            var service = (DisposableService)scope.Resolve<IServiceA>();
+
+            // Act
+            scope.Dispose();
+
+            // Assert
+            service.IsDisposed.ShouldBeTrue();
+        }
     }
 }

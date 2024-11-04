@@ -5,18 +5,19 @@ public class Container
     private readonly Dictionary<Type, Registration> registrations = [];
     private readonly HashSet<Type> resolvingTypes = [];
 
+    public Scope BeginScope() => new(this);
+
     public void Register<TInterface, TImplementation>(Lifetime lifetime = Lifetime.Transient)
     {
-        if (!registrations.ContainsKey(typeof(TInterface)))
-            registrations[typeof(TInterface)] = new Registration([], lifetime);
+        var interfaceType = typeof(TInterface);
 
-        registrations[typeof(TInterface)] = registrations[typeof(TInterface)].AddImplementation(typeof(TImplementation));
+        if (!registrations.ContainsKey(interfaceType))
+            registrations[interfaceType] = new Registration([], lifetime);
+
+        registrations[interfaceType] = registrations[interfaceType].AddImplementation(typeof(TImplementation));
     }
 
-    public TInterface Resolve<TInterface>()
-    {
-        return (TInterface)Resolve(typeof(TInterface));
-    }
+    public TInterface Resolve<TInterface>(Scope? scope = null) => (TInterface)Resolve(typeof(TInterface), scope);
 
     public IEnumerable<TInterface> ResolveAll<TInterface>()
     {
@@ -24,34 +25,39 @@ public class Container
 
     }
 
-    private object Resolve(Type interfaceType)
+    public object Resolve(Type interfaceType, Scope? scope = null)
     {
         if (interfaceType.IsGenericType && interfaceType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
         {
             var itemType = interfaceType.GetGenericArguments()[0];
-            return ResolveAll(itemType);
+            return ResolveAll(itemType, scope);
         }
 
         if (!registrations.TryGetValue(interfaceType, out var registration))
+        {
+            if (interfaceType is { IsAbstract: false, IsInterface: false })
+                return CreateInstance(interfaceType);
+
             throw new Exception($"Type {interfaceType.Name} not registered.");
+        }
 
         var implementationType = registration.Implementations.Last();
 
-        if (registration.Lifetime == Lifetime.Singleton)
+        return registration.Lifetime switch
         {
-            return registration.Instance ??
-                   (registration.Instance = CreateInstance(implementationType));
-        }
-
-        return CreateInstance(implementationType);
+            Lifetime.Singleton => registration.Instance ?? (registration.Instance = CreateInstance(implementationType)),
+            Lifetime.Scoped when scope is null => throw new InvalidOperationException("Scope is required for scoped lifetime."),
+            Lifetime.Scoped => scope.Resolve(implementationType),
+            _ => CreateInstance(implementationType)
+        };
     }
 
-    private IEnumerable<object> ResolveAll(Type interfaceType)
+    private IEnumerable<object> ResolveAll(Type interfaceType, Scope? scope = null)
     {
         if (!registrations.TryGetValue(interfaceType, out var registration))
             throw new Exception($"Type {interfaceType.Name} not registered.");
 
-        return registration.Implementations.Select(CreateInstance).ToList();
+        return [.. registration.Implementations.Select(type => Resolve(type, scope))];
     }
 
     private object CreateInstance(Type implementationType)
@@ -73,5 +79,10 @@ public class Container
         {
             resolvingTypes.Remove(implementationType);
         }
+    }
+
+    public bool TryGetRegistration(Type type, out Registration? registration)
+    {
+        return registrations.TryGetValue(type, out registration);
     }
 }
